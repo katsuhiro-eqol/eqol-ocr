@@ -1,7 +1,7 @@
 import io
 
+import pymupdf as fitz
 from PIL import Image
-from pdf2image import convert_from_bytes
 
 
 def file_to_image(file_bytes: bytes, filename: str, dpi: int = 200) -> Image.Image:
@@ -9,8 +9,11 @@ def file_to_image(file_bytes: bytes, filename: str, dpi: int = 200) -> Image.Ima
     PDF と一般的な画像フォーマット（PNG / JPEG 等）に対応。
     """
     if filename.lower().endswith(".pdf"):
-        pages = convert_from_bytes(file_bytes, dpi=dpi)
-        if not pages:
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        if not doc.page_count:
             raise ValueError("PDFからページを取得できませんでした")
-        return pages[0]
+        page = doc[0]
+        mat = fitz.Matrix(dpi / 72, dpi / 72)
+        pix = page.get_pixmap(matrix=mat)
+        return Image.open(io.BytesIO(pix.tobytes("png")))
     return Image.open(io.BytesIO(file_bytes))

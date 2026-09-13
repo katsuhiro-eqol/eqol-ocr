@@ -1,5 +1,16 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
+export async function pingHealth(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/health`, {
+      signal: AbortSignal.timeout(4000),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export interface TemplateInfo {
   template_id: string;
   document_type: string;

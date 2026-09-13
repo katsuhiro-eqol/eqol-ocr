@@ -1,0 +1,425 @@
+<title>精度とコストを両立させるOCR — eqol-ocr</title>
+<style>
+:root {
+  --ink: #1B3550;
+  --amber: #C8780F;
+  --amber-d: #A35F00;
+  --amber-light: #FEF3E2;
+  --amber-border: #E9C07A;
+  --body: #354F68;
+  --muted: #6E8CA8;
+  --paper: #F6F4F0;
+  --card: #FFFFFF;
+  --divider: #CFDAE6;
+  --green: #2A7A50;
+  --green-light: #E4F3EC;
+  --blue-pale: #ECF2F8;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --ink: #C8DCEE; --paper: #182538; --card: #1E2F48;
+  --divider: #2B3F5C; --body: #88AECB; --muted: #527898;
+  --blue-pale: #1A2D44; --green-light: #142A20; --amber-light: #271C04;
+  --amber-border: #4A3200;
+}}
+:root[data-theme="dark"] {
+  --ink: #C8DCEE; --paper: #182538; --card: #1E2F48;
+  --divider: #2B3F5C; --body: #88AECB; --muted: #527898;
+  --blue-pale: #1A2D44; --green-light: #142A20; --amber-light: #271C04;
+  --amber-border: #4A3200;
+}
+:root[data-theme="light"] {
+  --ink: #1B3550; --paper: #F6F4F0; --card: #FFFFFF;
+  --divider: #CFDAE6; --body: #354F68; --muted: #6E8CA8;
+  --blue-pale: #ECF2F8; --green-light: #E4F3EC; --amber-light: #FEF3E2;
+  --amber-border: #E9C07A;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #6E8299;
+  display: flex; justify-content: center; align-items: flex-start;
+  padding: 40px 20px 60px;
+  min-height: 100vh;
+  font-family: "Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic","Meiryo UI","Meiryo",system-ui,sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+@media (prefers-color-scheme: dark) { body { background: #0C1620; }}
+:root[data-theme="dark"] body { background: #0C1620; }
+:root[data-theme="light"] body { background: #6E8299; }
+
+/* ── A4 PAGE ── */
+.page {
+  width: 210mm;
+  min-height: 297mm;
+  background: var(--paper);
+  box-shadow: 0 12px 56px rgba(0,0,0,0.28);
+  display: flex; flex-direction: column;
+}
+
+/* ── HEADER ── */
+.hd {
+  background: var(--ink);
+  padding: 18px 28px 20px;
+}
+.hd-eye {
+  font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--amber); font-weight: 800; margin-bottom: 8px;
+}
+.hd h1 {
+  font-size: 17.5px; font-weight: 800; color: #fff;
+  line-height: 1.4; text-wrap: balance; margin-bottom: 10px;
+  letter-spacing: -0.01em;
+}
+.hd h1 em { font-style: normal; color: var(--amber); }
+.hd-body {
+  font-size: 9.5px; color: rgba(255,255,255,0.68); line-height: 1.75;
+}
+
+/* ── COST STRIP ── */
+.cost-strip {
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  border-bottom: 1.5px solid var(--divider);
+}
+.cs-item {
+  padding: 12px 20px;
+  display: flex; align-items: center; gap: 12px;
+}
+.cs-item.a { background: var(--blue-pale); }
+.cs-item.b {
+  background: var(--amber-light);
+  border-left: 1.5px solid var(--amber-border);
+}
+.cs-num {
+  font-size: 26px; font-weight: 900; line-height: 1; flex-shrink: 0;
+  letter-spacing: -0.03em;
+}
+.cs-item.a .cs-num { color: var(--muted); }
+.cs-item.b .cs-num { color: var(--amber); }
+.cs-text { font-size: 9.5px; color: var(--body); line-height: 1.6; }
+.cs-text strong { font-weight: 700; display: block; color: var(--ink); margin-bottom: 1px; }
+.cs-sep {
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 10px;
+  border-left: 1.5px solid var(--divider);
+  background: var(--paper);
+}
+.cs-arr { font-size: 14px; color: var(--amber); font-weight: 900; }
+
+/* ── SECTION ── */
+.sec { padding: 14px 28px; }
+.sec + .sec { padding-top: 2px; }
+
+.stitle {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 8px; font-weight: 800; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 11px;
+}
+.stitle::after { content: ''; flex: 1; height: 1px; background: var(--divider); }
+
+/* ── QUADRANT CHART ── */
+.chart-box {
+  background: var(--card);
+  border: 1.5px solid var(--divider);
+  border-radius: 6px;
+  padding: 12px 10px 8px;
+  overflow: hidden;
+}
+
+/* SVG theming via CSS */
+.qsvg .hl-rect  { fill: var(--amber-light); }
+.qsvg .grid-ln  { stroke: var(--divider); }
+.qsvg .bdr-rect { stroke: var(--divider); }
+.qsvg .ax-lbl   { fill: var(--muted); }
+.qsvg .hl-lbl   { fill: var(--amber-d); }
+.qsvg .ann-line { stroke: var(--amber); }
+.qsvg .ann-txt  { fill: var(--amber-d); }
+.qsvg .ocr-c    { fill: var(--blue-pale); stroke: var(--muted); }
+.qsvg .ocr-t    { fill: var(--body); }
+.qsvg .ocr-s    { fill: var(--muted); }
+.qsvg .llm-c    { fill: var(--blue-pale); stroke: var(--ink); }
+.qsvg .llm-t    { fill: var(--ink); }
+.qsvg .llm-s    { fill: var(--muted); }
+.qsvg .eq-c     { fill: var(--amber); }
+.qsvg .eq-t     { fill: #fff; }
+.qsvg .rating-ok  { fill: var(--green); }
+.qsvg .rating-ng  { fill: var(--muted); }
+
+/* ── ARCHITECTURE ── */
+.arch { display: flex; flex-direction: column; gap: 8px; }
+
+.phase {
+  border: 1.5px solid var(--divider);
+  border-radius: 6px; overflow: hidden;
+}
+.ph-head {
+  padding: 6px 14px;
+  display: flex; align-items: center; gap: 9px;
+  font-size: 10px; font-weight: 700;
+}
+.ph-1 .ph-head {
+  background: var(--amber-light);
+  border-bottom: 1.5px solid var(--amber-border);
+  color: var(--amber-d);
+}
+.ph-2 .ph-head {
+  background: var(--blue-pale);
+  border-bottom: 1.5px solid var(--divider);
+  color: var(--ink);
+}
+.ph-badge {
+  font-size: 7px; font-weight: 800; letter-spacing: 0.1em;
+  padding: 2px 8px; border-radius: 20px; line-height: 1.7; white-space: nowrap;
+}
+.ph-1 .ph-badge { background: var(--amber); color: #fff; }
+.ph-2 .ph-badge { background: var(--ink); color: #fff; }
+.ph-note { font-size: 8px; color: var(--muted); margin-left: auto; font-weight: 500; }
+
+.ph-body {
+  background: var(--card);
+  padding: 10px 14px;
+  display: flex; align-items: center; gap: 0;
+}
+.ph-step {
+  flex: 1; text-align: center; padding: 6px 4px;
+}
+.ph-icon { font-size: 15px; margin-bottom: 4px; }
+.ph-lbl {
+  font-size: 9.5px; font-weight: 600; color: var(--body);
+  line-height: 1.3; margin-bottom: 2px;
+}
+.ph-sub { font-size: 8px; color: var(--muted); line-height: 1.4; }
+.ph-arr { flex-shrink: 0; width: 16px; text-align: center; color: var(--amber); font-size: 11px; }
+
+.ph2-wrap { display: flex; flex-direction: column; gap: 7px; }
+.backup {
+  display: flex; align-items: flex-start; gap: 8px;
+  background: var(--amber-light);
+  border: 1.5px solid var(--amber-border);
+  border-radius: 5px;
+  padding: 7px 12px;
+}
+.bk-lbl { font-size: 8.5px; font-weight: 800; color: var(--amber-d); flex-shrink: 0; white-space: nowrap; }
+.bk-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.bk-tag {
+  font-size: 8px; font-weight: 600; color: var(--body);
+  background: var(--card); border: 1px solid var(--amber-border);
+  border-radius: 3px; padding: 1px 7px; line-height: 1.8;
+}
+
+/* ── FOOTER ── */
+.ft {
+  margin-top: auto;
+  background: var(--ink);
+  padding: 8px 28px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.ft-txt { font-size: 8.5px; color: rgba(255,255,255,0.45); }
+.ft-tags { display: flex; gap: 7px; }
+.ft-tag {
+  font-size: 7.5px; font-weight: 700; letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.75); background: rgba(255,255,255,0.11);
+  padding: 2px 8px; border-radius: 3px;
+}
+
+@media print {
+  body { background: white; padding: 0; }
+  .page { box-shadow: none; }
+}
+</style>
+
+<div class="page">
+
+  <!-- ① HEADER -->
+  <header class="hd">
+    <div class="hd-eye">AI-OCR System — eqol-ocr MVP</div>
+    <h1>「OCRは使えない」と感じた方へ。<br>LLM Visionが、<em>読み取り精度の水準を塗り替えました。</em></h1>
+    <p class="hd-body">ここ数年でLLM Visionの能力は飛躍的に向上し、氏名・手書き文字・文脈を含む読み取り精度は<strong style="color:rgba(255,255,255,0.9)">人間と十分に比較しうるレベル</strong>に達しています。<br>
+    eqol-ocrは、このLLM Vision品質を、既存OCRのコスト水準で実現するハイブリッドアーキテクチャです。</p>
+  </header>
+
+  <!-- ② COST CONTEXT STRIP -->
+  <div class="cost-strip">
+    <div class="cs-item a">
+      <div class="cs-num">¥10</div>
+      <div class="cs-text">
+        <strong>LLM Vision 全ページ適用</strong>
+        人間並みの精度を実現するが、大量処理では費用が課題となる。（A4 1枚あたりの概算）
+      </div>
+    </div>
+    <div class="cs-sep"><div class="cs-arr">→</div></div>
+    <div class="cs-item b">
+      <div class="cs-num">¥1〜</div>
+      <div class="cs-text">
+        <strong>eqol-ocr のターゲット</strong>
+        既存OCRコスト水準のまま、LLM Vision相当の精度を実現する。
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ QUADRANT CHART -->
+  <section class="sec">
+    <h2 class="stitle">3つのアプローチの比較ポジション</h2>
+    <div class="chart-box">
+      <svg class="qsvg" viewBox="0 0 680 268" width="100%" style="display:block">
+        <defs>
+          <marker id="arrtip" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+            <path d="M0,0.5 L5,3 L0,5.5 Z" fill="#C8780F"/>
+          </marker>
+        </defs>
+
+        <!-- Highlighted top-left quadrant: 高精度 × 低コスト -->
+        <rect class="hl-rect" x="60" y="14" width="290" height="113" rx="5"/>
+
+        <!-- Border of full chart area -->
+        <rect class="bdr-rect" x="60" y="14" width="608" height="230" rx="5" fill="none" stroke-width="1"/>
+
+        <!-- Quadrant dividers -->
+        <line class="grid-ln" x1="350" y1="14" x2="350" y2="244" stroke-width="1.5" stroke-dasharray="5,3"/>
+        <line class="grid-ln" x1="60"  y1="127" x2="668" y2="127" stroke-width="1.5" stroke-dasharray="5,3"/>
+
+        <!-- Y-axis labels -->
+        <text class="ax-lbl" x="48" y="62"  text-anchor="middle" font-size="9">高精度</text>
+        <text class="ax-lbl" x="48" y="206" text-anchor="middle" font-size="9">低精度</text>
+
+        <!-- X-axis labels -->
+        <text class="ax-lbl" x="205" y="260" text-anchor="middle" font-size="9">低コスト（¥1〜2/枚）</text>
+        <text class="ax-lbl" x="511" y="260" text-anchor="middle" font-size="9">高コスト（¥10/枚）</text>
+
+        <!-- 理想の領域 label (top-left quadrant) -->
+        <text class="hl-lbl" x="175" y="26" text-anchor="middle" font-size="8.5" font-weight="800" letter-spacing="0.5">★ 理想の領域</text>
+
+        <!-- ── 従来OCR: low cost, LOW accuracy ── -->
+        <circle class="ocr-c" cx="165" cy="197" r="29" stroke-width="1.5"/>
+        <text class="ocr-t" x="165" y="192" text-anchor="middle" font-size="9.5" font-weight="700">従来のOCR</text>
+        <text class="ocr-s" x="165" y="205" text-anchor="middle" font-size="8">～¥1/枚</text>
+        <!-- ratings row -->
+        <text class="ocr-s" x="165" y="238" text-anchor="middle" font-size="8">精度 △</text>
+        <text class="rating-ng" x="225" y="238" text-anchor="middle" font-size="8">人名 ✗</text>
+        <text class="rating-ng" x="285" y="238" text-anchor="middle" font-size="8">文脈 ✗</text>
+
+        <!-- ── LLM Vision 全面: HIGH cost, high accuracy ── -->
+        <circle class="llm-c" cx="550" cy="65" r="29" stroke-width="1.5"/>
+        <text class="llm-t" x="550" y="58"  text-anchor="middle" font-size="9" font-weight="700">LLM Vision</text>
+        <text class="llm-t" x="550" y="70"  text-anchor="middle" font-size="9" font-weight="700">全面適用</text>
+        <text class="llm-s" x="550" y="81"  text-anchor="middle" font-size="8">～¥10/枚</text>
+        <!-- ratings row -->
+        <text class="llm-s"    x="490" y="108" text-anchor="middle" font-size="8">精度 ◎</text>
+        <text class="rating-ok" x="550" y="108" text-anchor="middle" font-size="8">人名 ◎</text>
+        <text class="rating-ok" x="610" y="108" text-anchor="middle" font-size="8">文脈 ◎</text>
+
+        <!-- ── eqol-ocr: LOW cost, HIGH accuracy (HERO) ── -->
+        <circle class="eq-c" cx="195" cy="65" r="35"/>
+        <text class="eq-t" x="195" y="57"  text-anchor="middle" font-size="11.5" font-weight="800">eqol-ocr</text>
+        <text class="eq-t" x="195" y="70"  text-anchor="middle" font-size="8.5" opacity="0.88">～¥1〜2/枚</text>
+        <text class="eq-t" x="195" y="81"  text-anchor="middle" font-size="8"   opacity="0.82">精度 ◎　人名 ◎　文脈 ◎</text>
+
+        <!-- Annotation: arrow + label pointing to eqol-ocr -->
+        <text class="ann-txt" x="373" y="68" font-size="8.5" font-weight="700">LLM Vision 品質を</text>
+        <text class="ann-txt" x="373" y="81" font-size="8.5" font-weight="700">OCR コストで実現</text>
+        <line class="ann-line" x1="371" y1="73" x2="237" y2="66" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrtip)"/>
+      </svg>
+    </div>
+  </section>
+
+  <!-- ④ ARCHITECTURE -->
+  <section class="sec">
+    <h2 class="stitle">eqol-ocr のアーキテクチャ — なぜ両立できるのか</h2>
+    <div class="arch">
+
+      <!-- Phase 1 -->
+      <div class="phase ph-1">
+        <div class="ph-head">
+          <span class="ph-badge">Phase 1</span>
+          帳票フォーマットの学習・記憶
+          <span class="ph-note">LLM Vision使用 ／ 初回のみ・以降は不要</span>
+        </div>
+        <div class="ph-body">
+          <div class="ph-step">
+            <div class="ph-icon">📄</div>
+            <div class="ph-lbl">帳票サンプル</div>
+            <div class="ph-sub">1枚用意するだけ</div>
+          </div>
+          <div class="ph-arr">▶</div>
+          <div class="ph-step">
+            <div class="ph-icon">🧠</div>
+            <div class="ph-lbl">GPT-4o Vision<br>がレイアウト解析</div>
+            <div class="ph-sub">フィールド位置・ラベル・<br>書式パターンを理解</div>
+          </div>
+          <div class="ph-arr">▶</div>
+          <div class="ph-step">
+            <div class="ph-icon">💾</div>
+            <div class="ph-lbl">テンプレート保存</div>
+            <div class="ph-sub">Firestoreに記録<br>次回以降は参照のみ</div>
+          </div>
+          <div class="ph-arr">▶</div>
+          <div class="ph-step">
+            <div class="ph-icon">♾</div>
+            <div class="ph-lbl">同書式に繰り返し適用</div>
+            <div class="ph-sub">以降はLLM Vision<br>コストはほぼゼロ</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase 2 -->
+      <div class="phase ph-2">
+        <div class="ph-head">
+          <span class="ph-badge">Phase 2</span>
+          書類処理（毎回）
+          <span class="ph-note">ベース：既存OCR ／ 必要箇所のみLLM Visionをバックアップ</span>
+        </div>
+        <div class="ph-body">
+          <div class="ph2-wrap" style="width:100%">
+            <div style="display:flex; align-items:center; gap:0; width:100%">
+              <div class="ph-step">
+                <div class="ph-icon">📄</div>
+                <div class="ph-lbl">書類画像/PDF</div>
+              </div>
+              <div class="ph-arr">▶</div>
+              <div class="ph-step">
+                <div class="ph-icon">🔍</div>
+                <div class="ph-lbl">Google Vision OCR</div>
+                <div class="ph-sub">文字・座標を認識<br>（～¥1/枚）</div>
+              </div>
+              <div class="ph-arr">▶</div>
+              <div class="ph-step">
+                <div class="ph-icon">📐</div>
+                <div class="ph-lbl">テンプレート照合</div>
+                <div class="ph-sub">フィールドを<br>自動マッピング</div>
+              </div>
+              <div class="ph-arr">▶</div>
+              <div class="ph-step">
+                <div class="ph-icon">📊</div>
+                <div class="ph-lbl">データ出力</div>
+                <div class="ph-sub">JSON / CSV<br>REST API</div>
+              </div>
+            </div>
+            <!-- LLM backup -->
+            <div class="backup">
+              <div class="bk-lbl">🤖 LLM Vision バックアップ（ここだけ）</div>
+              <div class="bk-tags">
+                <div class="bk-tag">氏名フィールド（誤認識リスクが高い）</div>
+                <div class="bk-tag">信頼度スコアが低いテキスト</div>
+                <div class="bk-tag">手書き文字</div>
+                <div class="bk-tag">チェックボックス（実装予定）</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ⑤ FOOTER -->
+  <footer class="ft">
+    <div class="ft-txt">eqol-ocr — AI-OCR System for Administrative Documents</div>
+    <div class="ft-tags">
+      <div class="ft-tag">FastAPI</div>
+      <div class="ft-tag">GPT-4o Vision</div>
+      <div class="ft-tag">Google Vision</div>
+      <div class="ft-tag">Firebase</div>
+    </div>
+  </footer>
+
+</div>

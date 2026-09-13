@@ -477,11 +477,22 @@ NAME_VISION_SYSTEM_PROMPT = """\
 """
 
 
+_MIN_CROP_WIDTH = 600  # high-detail Vision で十分な解像度を確保する最小幅（px）
+
 def _crop_image_b64(image: Image.Image, bbox: BBox) -> str:
-    """value_bbox の範囲でクロップし JPEG base64 を返す。"""
+    """value_bbox の範囲でクロップし、幅が足りない場合は拡大して PNG base64 を返す。
+    JPEG は手書き細線をぼかすため PNG（可逆）を使用する。
+    """
     cropped = crop_by_bbox(image, bbox)
+    w, h = cropped.size
+    if w < _MIN_CROP_WIDTH:
+        scale = _MIN_CROP_WIDTH / w
+        cropped = cropped.resize(
+            (int(w * scale), int(h * scale)),
+            Image.LANCZOS,
+        )
     buf = io.BytesIO()
-    cropped.save(buf, format="JPEG", quality=90)
+    cropped.save(buf, format="PNG")
     return base64.standard_b64encode(buf.getvalue()).decode()
 
 
@@ -502,8 +513,8 @@ def _extract_name_with_vision(
                         {
                             "type": "image_url",
                             "image_url": {
-                                "url": f"data:image/jpeg;base64,{b64}",
-                                "detail": "low",
+                                "url": f"data:image/png;base64,{b64}",
+                                "detail": "high",
                             },
                         },
                         {

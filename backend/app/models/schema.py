@@ -69,6 +69,7 @@ class DocumentTemplate(BaseModel):
     document_type: str
     page_size_note: str = ""
     fields: list[FieldAnchor]
+    owner_uid: str = ""
 
 
 class TemplateInfo(BaseModel):

@@ -20,20 +20,45 @@ from app.services import (
     openai_vision,
     template_store,
 )
-from app.services.auth import get_current_uid
+from app.services.auth import get_current_uid, is_anonymous, device_id_from_uid
+from app.services import usage
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 
+# ------------------------------------------------------------------ 使用回数
+
+@router.get("/usage")
+async def get_usage(uid: str = Depends(get_current_uid)):
+    """匿名ユーザーの使用回数を返す。登録ユーザーは limited=false。"""
+    if not is_anonymous(uid):
+        return {"limited": False}
+    device_id = device_id_from_uid(uid)
+    counts = usage.get_usage(device_id)
+    return {
+        "limited": True,
+        "phase1": {"used": counts["phase1"], "limit": usage.PHASE1_LIMIT},
+        "phase2": {"used": counts["phase2"], "limit": usage.PHASE2_LIMIT},
+    }
+
+
 # ------------------------------------------------------------------ テンプレート
 
-@router.post("/templates/learn", dependencies=[Depends(get_current_uid)])
+@router.post("/templates/learn")
 async def learn_template(
     document_type: str = Form(...),
     fields: str = Form(...),
     file: UploadFile = None,
+    uid: str = Depends(get_current_uid),
 ) -> DocumentTemplate:
     """Phase1: 新規フォーマットをLLMに解析させ、テンプレートとして保存する。"""
+    if is_anonymous(uid):
+        allowed, count, limit = usage.check_and_increment(device_id_from_uid(uid), "phase1")
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Phase1の使用上限（{limit}回）に達しました。ユーザー登録すると制限がなくなります。",
+            )
     field_names = [f.strip() for f in fields.split(",") if f.strip()]
     file_bytes = await file.read()
     image = image_loader.file_to_image(file_bytes, file.filename or "")
@@ -45,27 +70,29 @@ async def learn_template(
         template_id=str(uuid.uuid4()),
         document_type=document_type,
         fields=anchors,
+        owner_uid=uid,
     )
     template_store.save_template(template)
     return template
 
 
-@router.get("/templates", dependencies=[Depends(get_current_uid)])
-async def list_templates() -> list[TemplateInfo]:
-    return template_store.list_templates()
+@router.get("/templates")
+async def list_templates(uid: str = Depends(get_current_uid)) -> list[TemplateInfo]:
+    return template_store.list_templates(uid)
 
 
-@router.get("/templates/{template_id}", dependencies=[Depends(get_current_uid)])
-async def get_template(template_id: str) -> DocumentTemplate:
-    template = template_store.load_template(template_id)
+@router.get("/templates/{template_id}")
+async def get_template(template_id: str, uid: str = Depends(get_current_uid)) -> DocumentTemplate:
+    template = template_store.load_template(template_id, uid)
     if template is None:
         raise HTTPException(status_code=404, detail="テンプレートが見つかりません")
     return template
 
 
-@router.delete("/templates/{template_id}", status_code=204, dependencies=[Depends(get_current_uid)])
-async def delete_template(template_id: str) -> None:
-    template_store.delete_template(template_id)
+@router.delete("/templates/{template_id}", status_code=204)
+async def delete_template(template_id: str, uid: str = Depends(get_current_uid)) -> None:
+    if not template_store.delete_template(template_id, uid):
+        raise HTTPException(status_code=404, detail="テンプレートが見つかりません")
 
 
 # ------------------------------------------------------------------ OCR 抽出
@@ -81,7 +108,14 @@ async def extract_document(
     """Phase2: 既知テンプレートを使って抽出する。
     save=true（デフォルト）の場合、結果を Firestore に保存する。
     """
-    template = template_store.load_template(template_id)
+    if is_anonymous(uid):
+        allowed, count, limit = usage.check_and_increment(device_id_from_uid(uid), "phase2")
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Phase2の使用上限（{limit}回）に達しました。ユーザー登録すると制限がなくなります。",
+            )
+    template = template_store.load_template(template_id, uid)
     if template is None:
         raise HTTPException(status_code=404, detail="テンプレートが見つかりません")
 

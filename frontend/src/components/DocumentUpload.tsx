@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { type TemplateInfo, extractDocument, fetchTemplates, learnDocument } from "../api/client";
+import { type AnonymousUsageInfo, type TemplateInfo, extractDocument, fetchTemplates, fetchUsage, learnDocument } from "../api/client";
 
 export interface ExtractedField {
   field_key: string;
@@ -29,6 +29,28 @@ function isExtractionResult(v: unknown): v is ExtractionResult {
 
 const NEW_FORMAT = "新規フォーマット";
 
+function UsageBar({ label, used, limit }: { label: string; used: number; limit: number }) {
+  const remaining = limit - used;
+  const pct = Math.min((used / limit) * 100, 100);
+  const isWarning = remaining <= Math.ceil(limit * 0.2);
+  return (
+    <div className="space-y-0.5">
+      <div className="flex justify-between text-xs text-gray-600">
+        <span>{label}</span>
+        <span className={isWarning ? "text-red-500 font-medium" : ""}>
+          残り {remaining} / {limit} 回
+        </span>
+      </div>
+      <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${isWarning ? "bg-red-400" : "bg-blue-400"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 interface DocumentUploadProps {
   onResult?: (r: ExtractionResult) => void;
   onIsNewFormatChange?: (isNew: boolean) => void;
@@ -47,11 +69,20 @@ export function DocumentUpload({ onResult, onIsNewFormatChange, documentType, fi
   const [dragging, setDragging] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [usageInfo, setUsageInfo] = useState<AnonymousUsageInfo | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const comboboxRef = useRef<HTMLDivElement>(null);
 
   const isNew = templateId === NEW_FORMAT;
+
+  const refreshUsage = () => {
+    fetchUsage().then((info) => {
+      setUsageInfo(info.limited ? info : null);
+    });
+  };
+
+  useEffect(() => { refreshUsage(); }, []);
 
   useEffect(() => {
     if (!dropdownOpen) return;
@@ -112,8 +143,10 @@ export function DocumentUpload({ onResult, onIsNewFormatChange, documentType, fi
       if (!isNew && isExtractionResult(data)) {
         onResult?.(data);
       }
+      refreshUsage();
     } catch (e) {
       setError(e instanceof Error ? e.message : "エラーが発生しました");
+      refreshUsage();
     } finally {
       setLoading(false);
     }
@@ -266,6 +299,15 @@ export function DocumentUpload({ onResult, onIsNewFormatChange, documentType, fi
           </svg>
           {isNew ? "テンプレートを保存しました" : "読み取り完了 — 右パネルに結果を表示しました"}
         </p>
+      )}
+
+      {usageInfo && (
+        <div className="w-full border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2">
+          <p className="text-xs font-medium text-gray-500">無料枠の使用回数</p>
+          <UsageBar label="学習（Phase1）" used={usageInfo.phase1.used} limit={usageInfo.phase1.limit} />
+          <UsageBar label="読取（Phase2）" used={usageInfo.phase2.used} limit={usageInfo.phase2.limit} />
+          <p className="text-xs text-gray-400 pt-0.5">ユーザー登録で制限なし</p>
+        </div>
       )}
     </div>
   );

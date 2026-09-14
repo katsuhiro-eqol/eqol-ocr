@@ -24,6 +24,8 @@ async def get_current_uid(
     x_device_id: str | None = Header(None, alias="X-Device-Id"),
 ) -> str:
     if settings.dev_mode:
+        if x_device_id and len(x_device_id) <= 128:
+            return f"anon_{x_device_id}"
         return "dev-user"
 
     if authorization and authorization.startswith("Bearer "):

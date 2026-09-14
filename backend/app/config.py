@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     # ローカル開発用フォールバック（Firestore未設定時にJSONファイルを使う）
     template_store_path: str = "./data/templates"
     fallback_confidence_threshold: float = 0.5
+    # 使用回数制限を除外する uid（カンマ区切り）
+    unlimited_uids: str = ""
     # CORS 許可オリジン（カンマ区切り）
     cors_origins: str = "http://localhost:5173"
 

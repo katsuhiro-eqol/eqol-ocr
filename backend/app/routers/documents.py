@@ -22,6 +22,13 @@ from app.services import (
 )
 from app.services.auth import get_current_uid, is_anonymous, device_id_from_uid
 from app.services import usage
+from app.config import settings
+
+def _is_limited(uid: str) -> bool:
+    if not is_anonymous(uid):
+        return False
+    unlimited = {u.strip() for u in settings.unlimited_uids.split(",") if u.strip()}
+    return uid not in unlimited
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -52,7 +59,7 @@ async def learn_template(
     uid: str = Depends(get_current_uid),
 ) -> DocumentTemplate:
     """Phase1: 新規フォーマットをLLMに解析させ、テンプレートとして保存する。"""
-    if is_anonymous(uid):
+    if _is_limited(uid):
         allowed, count, limit = usage.check_and_increment(device_id_from_uid(uid), "phase1")
         if not allowed:
             raise HTTPException(
@@ -108,7 +115,7 @@ async def extract_document(
     """Phase2: 既知テンプレートを使って抽出する。
     save=true（デフォルト）の場合、結果を Firestore に保存する。
     """
-    if is_anonymous(uid):
+    if _is_limited(uid):
         allowed, count, limit = usage.check_and_increment(device_id_from_uid(uid), "phase2")
         if not allowed:
             raise HTTPException(

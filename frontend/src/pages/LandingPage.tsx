@@ -68,7 +68,6 @@ const LP_CSS = `
 .lp nav { background:var(--lp-surface); border-bottom:1px solid var(--lp-border); position:sticky; top:0; z-index:100; }
 .lp .nav-inner { display:flex; align-items:center; justify-content:space-between; padding-block:14px; }
 .lp .logo { display:flex; align-items:center; gap:10px; text-decoration:none; color:var(--lp-text); }
-.lp .logo-mark { width:34px; height:34px; background:var(--lp-accent); border-radius:7px; display:grid; place-items:center; color:#fff; flex-shrink:0; }
 .lp .logo-name { font-family:'Noto Serif JP',serif; font-weight:700; font-size:1.0625rem; letter-spacing:.04em; }
 .lp .nav-right { display:flex; align-items:center; gap:28px; }
 .lp .nav-link { text-decoration:none; color:var(--lp-text-2); font-size:.875rem; font-weight:500; transition:color .15s; }
@@ -189,13 +188,8 @@ export default function LandingPage() {
         <div className="lp-container">
           <div className="nav-inner">
             <a href="/" className="logo">
-              <div className="logo-mark">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 12h6M9 16h6M9 8h6"/>
-                  <rect x="3" y="3" width="18" height="18" rx="2"/>
-                </svg>
-              </div>
-              <span className="logo-name">eqol OCR</span>
+              <img src="/eq-ocr.png" alt="eq-OCR" style={{height:'34px', width:'auto'}} />
+              <span className="logo-name">eq-OCR</span>
             </a>
             <div className="nav-right">
               <a href="#how" className="nav-link">仕組み</a>
@@ -406,15 +400,10 @@ export default function LandingPage() {
         <div className="lp-container">
           <div className="footer-inner">
             <a href="/" className="logo">
-              <div className="logo-mark">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 12h6M9 16h6M9 8h6"/>
-                  <rect x="3" y="3" width="18" height="18" rx="2"/>
-                </svg>
-              </div>
-              <span className="logo-name">eqol OCR</span>
+              <img src="/eq-ocr.png" alt="eq-OCR" style={{height:'34px', width:'auto'}} />
+              <span className="logo-name">eq-OCR</span>
             </a>
-            <p className="footer-copy">© 2026 eqol OCR. All rights reserved.</p>
+            <p className="footer-copy">© 2026 eq-OCR. All rights reserved.</p>
           </div>
         </div>
       </footer>

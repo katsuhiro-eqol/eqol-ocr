@@ -177,7 +177,11 @@ const LP_CSS = `
 }
 `
 
+import { useEffect } from 'react'
+import { pingHealth } from '../api/client'
+
 export default function LandingPage() {
+  useEffect(() => { pingHealth() }, [])
   return (
     <div className="lp">
       {/* eslint-disable-next-line react/no-danger */}
